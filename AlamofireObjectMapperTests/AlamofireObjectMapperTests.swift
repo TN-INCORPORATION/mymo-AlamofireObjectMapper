@@ -11,9 +11,15 @@ class AlamofireObjectMapperTests: XCTestCase {
 
     func testResponseObject() {
         let expectation = self.expectation(description: "Object mapping")
+        // เปลี่ยนเป็น AF.request และเช็กผลผ่าน response.result
         AF.request(sampleURL).responseObject { (response: AFDataResponse<WeatherResponse>) in
             expectation.fulfill()
-            XCTAssertNotNil(response.value?.location)
+            switch response.result {
+            case .success(let value):
+                XCTAssertNotNil(value.location)
+            case .failure(let error):
+                XCTFail("Error: \(error)")
+            }
         }
         waitForExpectations(timeout: 10)
     }
@@ -37,7 +43,7 @@ class AlamofireObjectMapperTests: XCTestCase {
     }
 }
 
-// MARK: - Models for Testing
+// MARK: - Models for Test (ใส่ไว้เพื่อให้คอมไพล์ผ่าน)
 class WeatherResponse: Mappable {
     var location: String?
     var threeDayForecast: [Forecast]?
@@ -52,9 +58,7 @@ class Forecast: Mappable {
     var day: String?; var temperature: Int?; var conditions: String?
     required init?(map: Map) {}
     func mapping(map: Map) {
-        day <- map["day"]
-        temperature <- map["temperature"]
-        conditions <- map["conditions"]
+        day <- map["day"]; temperature <- map["temperature"]; conditions <- map["conditions"]
     }
 }
 
