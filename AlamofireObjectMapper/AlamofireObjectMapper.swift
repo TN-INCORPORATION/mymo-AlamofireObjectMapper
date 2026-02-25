@@ -1,59 +1,3 @@
-//
-
-//  Request.swift
-
-//  AlamofireObjectMapper
-
-//
-
-//  Created by Tristan Himmelman on 2015-04-30.
-
-//
-
-//  The MIT License (MIT)
-
-//
-
-//  Copyright (c) 2014-2015 Tristan Himmelman
-
-//
-
-//  Permission is hereby granted, free of charge, to any person obtaining a copy
-
-//  of this software and associated documentation files (the "Software"), to deal
-
-//  in the Software without restriction, including without limitation the rights
-
-//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-
-//  copies of the Software, and to permit persons to whom the Software is
-
-//  furnished to do so, subject to the following conditions:
-
-//
-
-//  The above copyright notice and this permission notice shall be included in
-
-//  all copies or substantial portions of the Software.
-
-//
-
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-
-//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-
-//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-
-//  THE SOFTWARE.
-
-
-
 import Foundation
 import Alamofire
 import ObjectMapper
@@ -65,9 +9,7 @@ extension DataRequest {
         case dataSerializationFailed = 2
     }
     
-    /// Utility function for extracting JSON from response
     internal static func processResponse(request: URLRequest?, response: HTTPURLResponse?, data: Data?, keyPath: String?) -> Any? {
-        // ใช้ JSONSerialization ตามมาตรฐาน Alamofire 4
         if let data = data, let result = try? JSONSerialization.jsonObject(with: data, options: .allowFragments) {
             if let keyPath = keyPath, !keyPath.isEmpty {
                 return (result as AnyObject).value(forKeyPath: keyPath)
@@ -83,44 +25,61 @@ extension DataRequest {
         return NSError(domain: errorDomain, code: code.rawValue, userInfo: userInfo)
     }
 
-    // MARK: - ObjectMapper Serializers (BaseMappable)
+    // MARK: - BaseMappable Serializers
     
     public static func ObjectMapperSerializer<T: BaseMappable>(_ keyPath: String?, mapToObject object: T? = nil, context: MapContext? = nil) -> DataResponseSerializer<T> {
         return DataResponseSerializer { request, response, data, error in
             if let error = error { return .failure(error) }
-            
             let JSONObject = processResponse(request: request, response: response, data: data, keyPath: keyPath)
             
             if let object = object {
-                // ✅ แก้ไข Ambiguity: ใส่ as? [String: Any]
                 _ = Mapper<T>(context: context, shouldIncludeNilValues: false).map(JSONObject: JSONObject as? [String: Any], toObject: object)
                 return .success(object)
             } else if let parsedObject = Mapper<T>(context: context, shouldIncludeNilValues: false).map(JSONObject: JSONObject as? [String: Any]) {
                 return .success(parsedObject)
             }
-            
-            let failureReason = "ObjectMapper failed to serialize response."
-            return .failure(newError(.dataSerializationFailed, failureReason: failureReason))
+            return .failure(newError(.dataSerializationFailed, failureReason: "ObjectMapper failed to serialize response."))
         }
     }
     
     public static func ObjectMapperArraySerializer<T: BaseMappable>(_ keyPath: String?, context: MapContext? = nil) -> DataResponseSerializer<[T]> {
         return DataResponseSerializer { request, response, data, error in
             if let error = error { return .failure(error) }
-            
             let JSONObject = processResponse(request: request, response: response, data: data, keyPath: keyPath)
             
-            // ✅ แก้ไข Ambiguity: ใส่ as? [[String: Any]]
             if let parsedObject = Mapper<T>(context: context, shouldIncludeNilValues: false).mapArray(JSONObject: JSONObject as? [[String: Any]]) {
                 return .success(parsedObject)
             }
-            
-            let failureReason = "ObjectMapper failed to serialize response."
-            return .failure(newError(.dataSerializationFailed, failureReason: failureReason))
+            return .failure(newError(.dataSerializationFailed, failureReason: "ObjectMapper failed to serialize response."))
         }
     }
 
-    // MARK: - responseObject / responseArray
+    // MARK: - ImmutableMappable Serializers
+    
+    public static func ObjectMapperImmutableSerializer<T: ImmutableMappable>(_ keyPath: String?, context: MapContext? = nil) -> DataResponseSerializer<T> {
+        return DataResponseSerializer { request, response, data, error in
+            if let error = error { return .failure(error) }
+            let JSONObject = processResponse(request: request, response: response, data: data, keyPath: keyPath)
+            
+            if let JSONObject = JSONObject, let parsedObject = try? Mapper<T>(context: context, shouldIncludeNilValues: false).map(JSONObject: JSONObject as? [String: Any]) as T {
+                return .success(parsedObject)
+            }
+            return .failure(newError(.dataSerializationFailed, failureReason: "ObjectMapper failed to serialize response."))
+        }
+    }
+    
+    public static func ObjectMapperImmutableArraySerializer<T: ImmutableMappable>(_ keyPath: String?, context: MapContext? = nil) -> DataResponseSerializer<[T]> {
+        return DataResponseSerializer { request, response, data, error in
+            if let error = error { return .failure(error) }
+            if let JSONObject = processResponse(request: request, response: response, data: data, keyPath: keyPath),
+               let parsedObject = try? Mapper<T>(context: context, shouldIncludeNilValues: false).mapArray(JSONObject: JSONObject as? [[String: Any]]) as [T] {
+                return .success(parsedObject)
+            }
+            return .failure(newError(.dataSerializationFailed, failureReason: "ObjectMapper failed to serialize response."))
+        }
+    }
+
+    // MARK: - Handlers
     
     @discardableResult
     public func responseObject<T: BaseMappable>(queue: DispatchQueue? = nil, keyPath: String? = nil, mapToObject object: T? = nil, context: MapContext? = nil, completionHandler: @escaping (DataResponse<T>) -> Void) -> Self {
@@ -131,216 +90,14 @@ extension DataRequest {
     public func responseArray<T: BaseMappable>(queue: DispatchQueue? = nil, keyPath: String? = nil, context: MapContext? = nil, completionHandler: @escaping (DataResponse<[T]>) -> Void) -> Self {
         return response(queue: queue, responseSerializer: DataRequest.ObjectMapperArraySerializer(keyPath, context: context), completionHandler: completionHandler)
     }
-}
 
-
-
-public final class MappableResponseSerializer<T: BaseMappable>: ResponseSerializer {
-
-    /// The `JSONDecoder` instance used to decode responses.
-
-    public let decoder: DataDecoder = JSONDecoder()
-
-    /// HTTP response codes for which empty responses are allowed.
-
-    public let emptyResponseCodes: Set<Int>
-
-    /// HTTP request methods for which empty responses are allowed.
-
-    public let emptyRequestMethods: Set<HTTPMethod>
-
-    
-
-    public let keyPath: String?
-
-    public let context: MapContext?
-
-    public let object: T?
-
-
-
-    public let serializeCallback: (URLRequest?,HTTPURLResponse?, Data?,Error?) throws -> T
-
-
-
-    /// Creates an instance using the values provided.
-
-    ///
-
-    /// - Parameters:
-
-    ///   - keyPath:
-
-    ///   - object:
-
-    ///   - context:
-
-    ///   - emptyResponseCodes:  The HTTP response codes for which empty responses are allowed. Defaults to
-
-    ///                          `[204, 205]`.
-
-    ///   - emptyRequestMethods: The HTTP request methods for which empty responses are allowed. Defaults to `[.head]`.
-
-    ///   - serializeCallback:
-
-    public init(_ keyPath: String?, mapToObject object: T? = nil, context: MapContext? = nil,
-
-                emptyResponseCodes: Set<Int> = MappableResponseSerializer.defaultEmptyResponseCodes,
-
-                emptyRequestMethods: Set<HTTPMethod> = MappableResponseSerializer.defaultEmptyRequestMethods, serializeCallback: @escaping (URLRequest?,HTTPURLResponse?, Data?,Error?) throws -> T) {
-
-
-
-        self.emptyResponseCodes = emptyResponseCodes
-
-        self.emptyRequestMethods = emptyRequestMethods
-
-        
-
-        self.keyPath = keyPath
-
-        self.context = context
-
-        self.object = object
-
-        self.serializeCallback = serializeCallback
-
+    @discardableResult
+    public func responseObject<T: ImmutableMappable>(queue: DispatchQueue? = nil, keyPath: String? = nil, context: MapContext? = nil, completionHandler: @escaping (DataResponse<T>) -> Void) -> Self {
+        return response(queue: queue, responseSerializer: DataRequest.ObjectMapperImmutableSerializer(keyPath, context: context), completionHandler: completionHandler)
     }
-
     
-
-    public func serialize(request: URLRequest?, response: HTTPURLResponse?, data: Data?, error: Error?) throws -> T {
-
-        guard error == nil else { throw error! }
-
-        
-
-        guard let data = data, !data.isEmpty else {
-
-            guard emptyResponseAllowed(forRequest: request, response: response) else {
-
-                throw AFError.responseSerializationFailed(reason: .inputDataNilOrZeroLength)
-
-            }
-
-            
-
-            guard let emptyValue = Empty.value as? T else {
-
-                throw AFError.responseSerializationFailed(reason: .invalidEmptyResponse(type: "\(T.self)"))
-
-            }
-
-            
-
-            return emptyValue
-
-        }
-
-        return try self.serializeCallback(request, response, data, error)
-
+    @discardableResult
+    public func responseArray<T: ImmutableMappable>(queue: DispatchQueue? = nil, keyPath: String? = nil, context: MapContext? = nil, completionHandler: @escaping (DataResponse<[T]>) -> Void) -> Self {
+        return response(queue: queue, responseSerializer: DataRequest.ObjectMapperImmutableArraySerializer(keyPath, context: context), completionHandler: completionHandler)
     }
-
-}
-
-
-
-public final class MappableArrayResponseSerializer<T: BaseMappable>: ResponseSerializer {
-
-    /// The `JSONDecoder` instance used to decode responses.
-
-    public let decoder: DataDecoder = JSONDecoder()
-
-    /// HTTP response codes for which empty responses are allowed.
-
-    public let emptyResponseCodes: Set<Int>
-
-    /// HTTP request methods for which empty responses are allowed.
-
-    public let emptyRequestMethods: Set<HTTPMethod>
-
-    
-
-    public let keyPath: String?
-
-    public let context: MapContext?
-
-
-
-    public let serializeCallback: (URLRequest?,HTTPURLResponse?, Data?,Error?) throws -> [T]
-
-    /// Creates an instance using the values provided.
-
-    ///
-
-    /// - Parameters:
-
-    ///   - keyPath:
-
-    ///   - context:
-
-    ///   - emptyResponseCodes:  The HTTP response codes for which empty responses are allowed. Defaults to
-
-    ///                          `[204, 205]`.
-
-    ///   - emptyRequestMethods: The HTTP request methods for which empty responses are allowed. Defaults to `[.head]`.
-
-    ///   - serializeCallback:
-
-    public init(_ keyPath: String?, context: MapContext? = nil, serializeCallback: @escaping (URLRequest?,HTTPURLResponse?, Data?,Error?) throws -> [T],
-
-                emptyResponseCodes: Set<Int> = MappableArrayResponseSerializer.defaultEmptyResponseCodes,
-
-                emptyRequestMethods: Set<HTTPMethod> = MappableArrayResponseSerializer.defaultEmptyRequestMethods) {
-
-        self.emptyResponseCodes = emptyResponseCodes
-
-        self.emptyRequestMethods = emptyRequestMethods
-
-        
-
-        self.keyPath = keyPath
-
-        self.context = context
-
-        self.serializeCallback = serializeCallback
-
-    }
-
-    
-
-    public func serialize(request: URLRequest?, response: HTTPURLResponse?, data: Data?, error: Error?) throws -> [T] {
-
-        guard error == nil else { throw error! }
-
-        
-
-        guard let data = data, !data.isEmpty else {
-
-            guard emptyResponseAllowed(forRequest: request, response: response) else {
-
-                throw AFError.responseSerializationFailed(reason: .inputDataNilOrZeroLength)
-
-            }
-
-            
-
-            // TODO / FIX - Empty Response JSON Decodable Array Fix - "Cast from empty always fails..."
-
-            guard let emptyValue = Empty.value as? [T] else {
-
-                throw AFError.responseSerializationFailed(reason: .invalidEmptyResponse(type: "\(T.self)"))
-
-            }
-
-            
-
-            return emptyValue
-
-        }
-
-        return try self.serializeCallback(request, response, data, error)
-
-    }
-
 }

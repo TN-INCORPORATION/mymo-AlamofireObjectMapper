@@ -1,36 +1,8 @@
-//
-//  AlamofireObjectMapperTests.swift
-//  AlamofireObjectMapperTests
-//
-//  Created by Tristan Himmelman on 2015-04-30.
-//
-//  The MIT License (MIT)
-//
-//  Copyright (c) 2014-2015 Tristan Himmelman
-//
-//  Permission is hereby granted, free of charge, to any person obtaining a copy
-//  of this software and associated documentation files (the "Software"), to deal
-//  in the Software without restriction, including without limitation the rights
-//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-//  copies of the Software, and to permit persons to whom the Software is
-//  furnished to do so, subject to the following conditions:
-//
-//  The above copyright notice and this permission notice shall be included in
-//  all copies or substantial portions of the Software.
-//
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-//  THE SOFTWARE.
-
 import Foundation
 import XCTest
 import ObjectMapper
 import Alamofire
-import AlamofireObjectMapper
+@testable import AlamofireObjectMapper
 
 class AlamofireObjectMapperTests: XCTestCase {
     
@@ -45,13 +17,10 @@ class AlamofireObjectMapperTests: XCTestCase {
     func testResponseObject() {
         let URL = "https://raw.githubusercontent.com/tristanhimmelman/AlamofireObjectMapper/d8bb95982be8a11a2308e779bb9a9707ebe42ede/sample_json"
         let expectation = self.expectation(description: "\(URL)")
-        
-        // ✅ เปลี่ยน AF.request เป็น Alamofire.request
-        // ✅ เปลี่ยน AFDataResponse เป็น DataResponse
-        Alamofire.request(URL, method: .get).responseObject { (response: DataResponse<WeatherResponse>) in
+
+        _ = Alamofire.request(URL, method: .get).responseObject { (response: DataResponse<WeatherResponse>) in
             expectation.fulfill()
             
-            // ✅ ใน AF4 ต้องเข้าถึงค่าผ่าน .result.value
             let mappedObject = response.result.value
             
             XCTAssertNotNil(mappedObject, "Response should not be nil")
@@ -70,11 +39,90 @@ class AlamofireObjectMapperTests: XCTestCase {
         }
     }
     
+    func testResponseObjectMapToObject() {
+        let URL = "https://raw.githubusercontent.com/tristanhimmelman/AlamofireObjectMapper/d8bb95982be8a11a2308e779bb9a9707ebe42ede/sample_json"
+        let expectation = self.expectation(description: "\(URL)")
+        
+        let weatherResponse = WeatherResponse()
+        weatherResponse.date = Date()
+        
+        _ = Alamofire.request(URL, method: .get).responseObject(mapToObject: weatherResponse) { (response: DataResponse<WeatherResponse>) in
+            expectation.fulfill()
+            
+            let mappedObject = response.result.value
+            print(weatherResponse)
+            XCTAssertNotNil(mappedObject, "Response should not be nil")
+            XCTAssertNotNil(mappedObject?.date, "Date should not be nil")
+            XCTAssertNotNil(mappedObject?.location, "Location should not be nil")
+            XCTAssertNotNil(mappedObject?.threeDayForecast, "ThreeDayForcast should not be nil")
+            
+            for forecast in mappedObject!.threeDayForecast! {
+                XCTAssertNotNil(forecast.day, "day should not be nil")
+                XCTAssertNotNil(forecast.conditions, "conditions should not be nil")
+                XCTAssertNotNil(forecast.temperature, "temperature should not be nil")
+            }
+        }
+        
+        waitForExpectations(timeout: 10) { error in
+            XCTAssertNil(error, "\(String(describing: error))")
+        }
+    }
+    
+    func testResponseObjectWithKeyPath() {
+        let URL = "https://raw.githubusercontent.com/tristanhimmelman/AlamofireObjectMapper/2ee8f34d21e8febfdefb2b3a403f18a43818d70a/sample_keypath_json"
+        let expectation = self.expectation(description: "\(URL)")
+        
+        _ = Alamofire.request(URL, method: .get).responseObject(keyPath: "data") { (response: DataResponse<WeatherResponse>) in
+            expectation.fulfill()
+            
+            let mappedObject = response.result.value
+            
+            XCTAssertNotNil(mappedObject, "Response should not be nil")
+            XCTAssertNotNil(mappedObject?.location, "Location should not be nil")
+            XCTAssertNotNil(mappedObject?.threeDayForecast, "ThreeDayForcast should not be nil")
+            
+            for forecast in mappedObject!.threeDayForecast! {
+                XCTAssertNotNil(forecast.day, "day should not be nil")
+                XCTAssertNotNil(forecast.conditions, "conditions should not be nil")
+                XCTAssertNotNil(forecast.temperature, "temperature should not be nil")
+            }
+        }
+        
+        waitForExpectations(timeout: 10) { error in
+            XCTAssertNil(error, "\(String(describing: error))")
+        }
+    }
+    
+    func testResponseObjectWithNestedKeyPath() {
+        let URL = "https://raw.githubusercontent.com/tristanhimmelman/AlamofireObjectMapper/97231a04e6e4970612efcc0b7e0c125a83e3de6e/sample_keypath_json"
+        let expectation = self.expectation(description: "\(URL)")
+        
+        _ = Alamofire.request(URL, method: .get).responseObject(keyPath: "response.data") { (response: DataResponse<WeatherResponse>) in
+            expectation.fulfill()
+            
+            let mappedObject = response.result.value
+            
+            XCTAssertNotNil(mappedObject, "Response should not be nil")
+            XCTAssertNotNil(mappedObject?.location, "Location should not be nil")
+            XCTAssertNotNil(mappedObject?.threeDayForecast, "ThreeDayForcast should not be nil")
+            
+            for forecast in mappedObject!.threeDayForecast! {
+                XCTAssertNotNil(forecast.day, "day should not be nil")
+                XCTAssertNotNil(forecast.conditions, "conditions should not be nil")
+                XCTAssertNotNil(forecast.temperature, "temperature should not be nil")
+            }
+        }
+        
+        waitForExpectations(timeout: 10) { error in
+            XCTAssertNil(error, "\(String(describing: error))")
+        }
+    }
+
     func testResponseArray() {
         let URL = "https://raw.githubusercontent.com/tristanhimmelman/AlamofireObjectMapper/f583be1121dbc5e9b0381b3017718a70c31054f7/sample_array_json"
         let expectation = self.expectation(description: "\(URL)")
-        
-        Alamofire.request(URL, method: .get).responseArray { (response: DataResponse<[Forecast]>) in
+
+        _ = Alamofire.request(URL, method: .get).responseArray { (response: DataResponse<[Forecast]>) in
             expectation.fulfill()
             
             let mappedArray = response.result.value
@@ -88,22 +136,21 @@ class AlamofireObjectMapperTests: XCTestCase {
                 XCTAssertNotNil(forecast.temperature, "temperature should not be nil")
             }
         }
-        
+
         waitForExpectations(timeout: 10) { error in
             XCTAssertNil(error, "\(String(describing: error))")
         }
     }
     
     func testArrayResponseArrayWithKeyPath() {
-        // This is an example of a functional test case.
         let URL = "https://raw.githubusercontent.com/tristanhimmelman/AlamofireObjectMapper/d8bb95982be8a11a2308e779bb9a9707ebe42ede/sample_json"
         let expectation = self.expectation(description: "\(URL)")
         
-        _ = AF.request(URL, method: .get).responseArray(keyPath: "three_day_forecast") { (response: AFDataResponse<[Forecast]>) in
-            
+        _ = Alamofire.request(URL, method: .get).responseArray(keyPath: "three_day_forecast") { (response: DataResponse<[Forecast]>) in
+        
             expectation.fulfill()
             
-            let mappedArray = response.value
+            let mappedArray = response.result.value
             
             XCTAssertNotNil(mappedArray, "Response should not be nil")
             
@@ -120,15 +167,14 @@ class AlamofireObjectMapperTests: XCTestCase {
     }
     
     func testArrayResponseArrayWithNestedKeyPath() {
-        // This is an example of a functional test case.
         let URL = "https://raw.githubusercontent.com/tristanhimmelman/AlamofireObjectMapper/97231a04e6e4970612efcc0b7e0c125a83e3de6e/sample_keypath_json"
         let expectation = self.expectation(description: "\(URL)")
         
-        _ = AF.request(URL, method: .get).responseArray(keyPath: "response.data.three_day_forecast") { (response: AFDataResponse<[Forecast]>) in
+        _ = Alamofire.request(URL, method: .get).responseArray(keyPath: "response.data.three_day_forecast") { (response: DataResponse<[Forecast]>) in
             
             expectation.fulfill()
             
-            let mappedArray = response.value
+            let mappedArray = response.result.value
             
             XCTAssertNotNil(mappedArray, "Response should not be nil")
             
@@ -147,14 +193,13 @@ class AlamofireObjectMapperTests: XCTestCase {
     // MARK: - Immutable Tests
     
     func testResponseImmutableObject() {
-        // This is an example of a functional test case.
         let URL = "https://raw.githubusercontent.com/tristanhimmelman/AlamofireObjectMapper/d8bb95982be8a11a2308e779bb9a9707ebe42ede/sample_json"
         let expectation = self.expectation(description: "\(URL)")
         
-        _ = AF.request(URL, method: .get).responseObject { (response: AFDataResponse<WeatherResponseImmutable>) in
+        _ = Alamofire.request(URL, method: .get).responseObject { (response: DataResponse<WeatherResponseImmutable>) in
             expectation.fulfill()
             
-            let mappedObject = response.value
+            let mappedObject = response.result.value
             
             XCTAssertNotNil(mappedObject, "Response should not be nil")
             XCTAssertNotNil(mappedObject?.location, "Location should not be nil")
@@ -173,17 +218,15 @@ class AlamofireObjectMapperTests: XCTestCase {
     }
     
     func testResponseImmutableArray() {
-        // This is an example of a functional test case.
         let URL = "https://raw.githubusercontent.com/tristanhimmelman/AlamofireObjectMapper/f583be1121dbc5e9b0381b3017718a70c31054f7/sample_array_json"
         let expectation = self.expectation(description: "\(URL)")
         
-        _ = AF.request(URL, method: .get).responseArray { (response: AFDataResponse<[ImmutableForecast]>) in
+        _ = Alamofire.request(URL, method: .get).responseArray { (response: DataResponse<[ImmutableForecast]>) in
             expectation.fulfill()
             
-            let mappedArray = response.value
+            let mappedArray = response.result.value
             
             XCTAssertNotNil(mappedArray, "Response should not be nil")
-            
             XCTAssertTrue(mappedArray?.count == 3, "Didn't parse correct amount of objects")
             
             for forecast in mappedArray! {
@@ -205,37 +248,36 @@ class AlamofireObjectMapperTests: XCTestCase {
 // MARK: - ImmutableMappable
 
 class ImmutableWeatherResponse: ImmutableMappable {
-	let location: String
-	let threeDayForecast: [ImmutableForecast]
-	
-	required init(map: Map) throws {
-		location = try map.value("location")
-		threeDayForecast = try map.value("three_day_forecast")
-	}
+    let location: String
+    let threeDayForecast: [ImmutableForecast]
+    
+    required init(map: Map) throws {
+        location = try map.value("location")
+        threeDayForecast = try map.value("three_day_forecast")
+    }
 
-	func mapping(map: Map) {
-		location >>> map["location"]
-		threeDayForecast >>> map["three_day_forecast"]
-	}
+    func mapping(map: Map) {
+        location >>> map["location"]
+        threeDayForecast >>> map["three_day_forecast"]
+    }
 }
 
 class ImmutableForecast: ImmutableMappable {
-	let day: String
-	let temperature: Int
-	let conditions: String
-	
-	required init(map: Map) throws {
-		day = try map.value("day")
-		temperature = try map.value("temperature")
-		conditions = try map.value("conditions")
-	}
-	
-	func mapping(map: Map) {
-		day >>> map["day"]
-		temperature >>> map["temperature"]
-		conditions >>> map["conditions"]
-	}
-	
+    let day: String
+    let temperature: Int
+    let conditions: String
+    
+    required init(map: Map) throws {
+        day = try map.value("day")
+        temperature = try map.value("temperature")
+        conditions = try map.value("conditions")
+    }
+    
+    func mapping(map: Map) {
+        day >>> map["day"]
+        temperature >>> map["temperature"]
+        conditions >>> map["conditions"]
+    }
 }
 
 // MARK: - Mappable
@@ -246,7 +288,9 @@ class WeatherResponse: Mappable {
     var date: Date?
     
     init(){}
-    required init?(map: Map){}
+    
+    required init?(map: Map){
+    }
     
     func mapping(map: Map) {
         location <- map["location"]
@@ -259,7 +303,8 @@ class Forecast: Mappable {
     var temperature: Int?
     var conditions: String?
     
-    required init?(map: Map){}
+    required init?(map: Map){
+    }
     
     func mapping(map: Map) {
         day <- map["day"]
