@@ -2,7 +2,7 @@ import Foundation
 import Alamofire
 import ObjectMapper
 
-// MARK: - Serializers
+// MARK: - Serializers (AF5 Version)
 public struct ObjectMapperSerializer<T: BaseMappable>: ResponseSerializer {
     public let keyPath: String?
     public let object: T?
@@ -24,8 +24,7 @@ public struct ObjectMapperSerializer<T: BaseMappable>: ResponseSerializer {
         } else if let parsedObject = Mapper<T>(context: context, shouldIncludeNilValues: false).map(JSONObject: jsonObject as? [String: Any]) {
             return parsedObject
         }
-
-        throw AFError.responseSerializationFailed(reason: .decodingFailed(error: NSError(domain: "AlamofireObjectMapper", code: 2, userInfo: [NSLocalizedDescriptionKey: "ObjectMapper failed to serialize response."])))
+        throw AFError.responseSerializationFailed(reason: .decodingFailed(error: NSError(domain: "AlamofireObjectMapper", code: 2, userInfo: [NSLocalizedDescriptionKey: "Serialization failed."])))
     }
 }
 
@@ -41,16 +40,13 @@ public struct ObjectMapperArraySerializer<T: BaseMappable>: ResponseSerializer {
     public func serialize(request: URLRequest?, response: HTTPURLResponse?, data: Data?, error: Error?) throws -> [T] {
         if let error = error { throw error }
         let jsonObject = DataRequest.processResponse(data: data, keyPath: keyPath)
-
         if let parsedObject = Mapper<T>(context: context, shouldIncludeNilValues: false).mapArray(JSONObject: jsonObject as? [[String: Any]]) {
             return parsedObject
         }
-
-        throw AFError.responseSerializationFailed(reason: .decodingFailed(error: NSError(domain: "AlamofireObjectMapper", code: 2, userInfo: [NSLocalizedDescriptionKey: "ObjectMapper failed to serialize array response."])))
+        throw AFError.responseSerializationFailed(reason: .decodingFailed(error: NSError(domain: "AlamofireObjectMapper", code: 2, userInfo: [NSLocalizedDescriptionKey: "Array serialization failed."])))
     }
 }
 
-// MARK: - Immutable Serializers
 public struct ObjectMapperImmutableSerializer<T: ImmutableMappable>: ResponseSerializer {
     public let keyPath: String?
     public let context: MapContext?
@@ -63,12 +59,30 @@ public struct ObjectMapperImmutableSerializer<T: ImmutableMappable>: ResponseSer
     public func serialize(request: URLRequest?, response: HTTPURLResponse?, data: Data?, error: Error?) throws -> T {
         if let error = error { throw error }
         let jsonObject = DataRequest.processResponse(data: data, keyPath: keyPath)
-
         if let json = jsonObject as? [String: Any], let parsedObject = try? Mapper<T>(context: context).map(JSONObject: json) {
             return parsedObject
         }
+        throw AFError.responseSerializationFailed(reason: .decodingFailed(error: NSError(domain: "AlamofireObjectMapper", code: 2, userInfo: [NSLocalizedDescriptionKey: "Immutable serialization failed."])))
+    }
+}
 
-        throw AFError.responseSerializationFailed(reason: .decodingFailed(error: NSError(domain: "AlamofireObjectMapper", code: 2, userInfo: [NSLocalizedDescriptionKey: "ImmutableMapper failed to serialize response."])))
+// ✅ นี่คือส่วนที่ผมลืมในรอบที่แล้วครับ (Immutable Array)
+public struct ObjectMapperImmutableArraySerializer<T: ImmutableMappable>: ResponseSerializer {
+    public let keyPath: String?
+    public let context: MapContext?
+
+    public init(keyPath: String?, context: MapContext? = nil) {
+        self.keyPath = keyPath
+        self.context = context
+    }
+
+    public func serialize(request: URLRequest?, response: HTTPURLResponse?, data: Data?, error: Error?) throws -> [T] {
+        if let error = error { throw error }
+        let jsonObject = DataRequest.processResponse(data: data, keyPath: keyPath)
+        if let jsonArray = jsonObject as? [[String: Any]], let parsedObject = try? Mapper<T>(context: context).mapArray(JSONObject: jsonArray) {
+            return parsedObject
+        }
+        throw AFError.responseSerializationFailed(reason: .decodingFailed(error: NSError(domain: "AlamofireObjectMapper", code: 2, userInfo: [NSLocalizedDescriptionKey: "Immutable Array serialization failed."])))
     }
 }
 
@@ -96,5 +110,10 @@ extension DataRequest {
     @discardableResult
     public func responseObject<T: ImmutableMappable>(queue: DispatchQueue = .main, keyPath: String? = nil, context: MapContext? = nil, completionHandler: @escaping (AFDataResponse<T>) -> Void) -> Self {
         return response(queue: queue, responseSerializer: ObjectMapperImmutableSerializer(keyPath: keyPath, context: context), completionHandler: completionHandler)
+    }
+
+    @discardableResult // ✅ เพิ่มกลับมาให้ครบแล้วครับ
+    public func responseArray<T: ImmutableMappable>(queue: DispatchQueue = .main, keyPath: String? = nil, context: MapContext? = nil, completionHandler: @escaping (AFDataResponse<[T]>) -> Void) -> Self {
+        return response(queue: queue, responseSerializer: ObjectMapperImmutableArraySerializer(keyPath: keyPath, context: context), completionHandler: completionHandler)
     }
 }
