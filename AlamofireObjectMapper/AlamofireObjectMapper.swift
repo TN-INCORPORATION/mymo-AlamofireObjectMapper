@@ -2,7 +2,7 @@ import Foundation
 import Alamofire
 import ObjectMapper
 
-// MARK: - Serializers (โครงสร้างใหม่ของ AF5)
+// MARK: - Serializers (Alamofire 5 Version)
 public struct ObjectMapperSerializer<T: BaseMappable>: ResponseSerializer {
     public let keyPath: String?
     public let object: T?
@@ -16,12 +16,12 @@ public struct ObjectMapperSerializer<T: BaseMappable>: ResponseSerializer {
 
     public func serialize(request: URLRequest?, response: HTTPURLResponse?, data: Data?, error: Error?) throws -> T {
         if let error = error { throw error }
-        let jsonObject = DataRequest.processResponse(data: data, keyPath: keyPath)
-
+        let JSONObject = DataRequest.processResponse(data: data, keyPath: keyPath)
+        
         if let object = object {
-            _ = Mapper<T>(context: context, shouldIncludeNilValues: false).map(JSONObject: jsonObject as? [String: Any], toObject: object)
+            _ = Mapper<T>(context: context, shouldIncludeNilValues: false).map(JSONObject: JSONObject as? [String: Any], toObject: object)
             return object
-        } else if let parsedObject = Mapper<T>(context: context, shouldIncludeNilValues: false).map(JSONObject: jsonObject as? [String: Any]) {
+        } else if let parsedObject = Mapper<T>(context: context, shouldIncludeNilValues: false).map(JSONObject: JSONObject as? [String: Any]) {
             return parsedObject
         }
         throw AFError.responseSerializationFailed(reason: .decodingFailed(error: NSError(domain: "com.alamofireobjectmapper.error", code: 2, userInfo: [NSLocalizedDescriptionKey: "ObjectMapper failed to serialize response."])))
@@ -39,9 +39,9 @@ public struct ObjectMapperArraySerializer<T: BaseMappable>: ResponseSerializer {
 
     public func serialize(request: URLRequest?, response: HTTPURLResponse?, data: Data?, error: Error?) throws -> [T] {
         if let error = error { throw error }
-        let jsonObject = DataRequest.processResponse(data: data, keyPath: keyPath)
-
-        if let parsedObject = Mapper<T>(context: context, shouldIncludeNilValues: false).mapArray(JSONObject: jsonObject as? [[String: Any]]) {
+        let JSONObject = DataRequest.processResponse(data: data, keyPath: keyPath)
+        
+        if let parsedObject = Mapper<T>(context: context, shouldIncludeNilValues: false).mapArray(JSONObject: JSONObject as? [[String: Any]]) {
             return parsedObject
         }
         throw AFError.responseSerializationFailed(reason: .decodingFailed(error: NSError(domain: "com.alamofireobjectmapper.error", code: 2, userInfo: [NSLocalizedDescriptionKey: "ObjectMapper failed to serialize array."])))
@@ -59,9 +59,9 @@ public struct ObjectMapperImmutableSerializer<T: ImmutableMappable>: ResponseSer
 
     public func serialize(request: URLRequest?, response: HTTPURLResponse?, data: Data?, error: Error?) throws -> T {
         if let error = error { throw error }
-        let jsonObject = DataRequest.processResponse(data: data, keyPath: keyPath)
-
-        if let json = jsonObject as? [String: Any], let parsedObject = try? Mapper<T>(context: context).map(JSONObject: json) {
+        let JSONObject = DataRequest.processResponse(data: data, keyPath: keyPath)
+        
+        if let JSONObject = JSONObject, let parsedObject = try? Mapper<T>(context: context, shouldIncludeNilValues: false).map(JSONObject: JSONObject as? [String: Any]) {
             return parsedObject
         }
         throw AFError.responseSerializationFailed(reason: .decodingFailed(error: NSError(domain: "com.alamofireobjectmapper.error", code: 2, userInfo: [NSLocalizedDescriptionKey: "ImmutableMappable failed to serialize object."])))
@@ -79,16 +79,16 @@ public struct ObjectMapperImmutableArraySerializer<T: ImmutableMappable>: Respon
 
     public func serialize(request: URLRequest?, response: HTTPURLResponse?, data: Data?, error: Error?) throws -> [T] {
         if let error = error { throw error }
-        let jsonObject = DataRequest.processResponse(data: data, keyPath: keyPath)
-
-        if let jsonArray = jsonObject as? [[String: Any]], let parsedObject = try? Mapper<T>(context: context).mapArray(JSONObject: jsonArray) {
+        let JSONObject = DataRequest.processResponse(data: data, keyPath: keyPath)
+        
+        if let JSONObject = JSONObject, let parsedObject = try? Mapper<T>(context: context, shouldIncludeNilValues: false).mapArray(JSONObject: JSONObject as? [[String: Any]]) {
             return parsedObject
         }
         throw AFError.responseSerializationFailed(reason: .decodingFailed(error: NSError(domain: "com.alamofireobjectmapper.error", code: 2, userInfo: [NSLocalizedDescriptionKey: "ImmutableMappable failed to serialize array."])))
     }
 }
 
-// MARK: - DataRequest Extension
+// MARK: - Handlers
 extension DataRequest {
     internal static func processResponse(data: Data?, keyPath: String?) -> Any? {
         guard let data = data else { return nil }
